@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CondoSmart — Transparencia financiera para condominios</title>
+  <meta name="description" content="Plataforma de transparencia financiera para condominios en Costa Rica." />
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-is@18/umd/react-is.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Geist', -apple-system, sans-serif; background: #f0f4f8; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    select option { color: #0a1220; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {
+  BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} = window.Recharts;
+const { useState, useMemo, useEffect, useRef } = React;
+
+const C = {
+  navy:'#0f2744', navyLight:'#1e3a5f', navyDeeper:'#0a1c33',
+  gold:'#e8a020', goldLight:'#f5c14f', goldDark:'#b8801a',
+  green:'#16a34a', red:'#dc2626', yellow:'#f59e0b',
+  bg:'#f0f4f8', cream:'#faf6ee', paper:'#fefcf7',
+  ink:'#0a1220', mute:'#64748b', border:'#e2e8f0',
+};
+
+const CATEGORY_LABELS = {
+  seguridad:'Seguridad', mantenimiento:'Mantenimiento', areas_verdes:'Áreas Verdes',
+  servicios_publicos:'Servicios Públicos', administracion:'Administración',
+  fondo_reserva:'Fondo de Reserva', limpieza:'Limpieza', extraordinario:'Extraordinarios',
+};
+const CATEGORY_COLORS = {
+  seguridad:C.navy, mantenimiento:C.gold, areas_verdes:C.green,
+  servicios_publicos:'#0891b2', administracion:'#7c3aed',
+  fondo_reserva:'#0f766e', limpieza:'#db2777', extraordinario:C.red,
+};
+
+const losRoblesData = {
+  id:'los-robles', nombre:'Condominio Los Robles',
+  unidades:45, cuota:35000, fondo_reserva_actual:4250000,
+  presupuesto_anual_gastos:18500000, presupuesto_anual_ingresos:19750000,
+  meses_disponibles:['Enero','Febrero','Marzo'],
+  presupuestos:{ seguridad:4800000,mantenimiento:3200000,areas_verdes:1800000,servicios_publicos:2400000,administracion:1600000,fondo_reserva:2400000,limpieza:1500000,extraordinario:800000 },
+  morosos:[
+    {unidad:'#34',meses:['Febrero','Marzo'],monto:70000,reincidente:true},
+    {unidad:'#12',meses:['Marzo'],monto:35000,reincidente:false},
+  ],
+  gastos:[
+    {id:'r1',mes:'Enero',fecha:'05/01/2025',proveedor:'Seguridad Vigente S.A.',categoria:'seguridad',monto:400000,descripcion:'Servicio mensual de seguridad'},
+    {id:'r2',mes:'Enero',fecha:'08/01/2025',proveedor:'MantenimientoCR',categoria:'mantenimiento',monto:245000,descripcion:'Mantenimiento general portones'},
+    {id:'r3',mes:'Enero',fecha:'10/01/2025',proveedor:'JASEC',categoria:'servicios_publicos',monto:198000,descripcion:'Electricidad áreas comunes'},
+    {id:'r4',mes:'Enero',fecha:'12/01/2025',proveedor:'Jardines Verdes',categoria:'areas_verdes',monto:145000,descripcion:'Mantenimiento jardines mensual'},
+    {id:'r5',mes:'Enero',fecha:'15/01/2025',proveedor:'Admin Los Robles',categoria:'administracion',monto:133333,descripcion:'Honorarios administración'},
+    {id:'r6',mes:'Enero',fecha:'18/01/2025',proveedor:'LimpiezaTotal',categoria:'limpieza',monto:122000,descripcion:'Limpieza áreas comunes'},
+    {id:'r7',mes:'Enero',fecha:'30/01/2025',proveedor:'Aporte Fondo Reserva',categoria:'fondo_reserva',monto:200000,descripcion:'Aporte mensual al fondo'},
+    {id:'r8',mes:'Febrero',fecha:'05/02/2025',proveedor:'Seguridad Vigente S.A.',categoria:'seguridad',monto:400000,descripcion:'Servicio mensual de seguridad'},
+    {id:'r9',mes:'Febrero',fecha:'08/02/2025',proveedor:'MantenimientoCR',categoria:'mantenimiento',monto:258000,descripcion:'Mantenimiento general'},
+    {id:'r10',mes:'Febrero',fecha:'09/02/2025',proveedor:'TecniRefriCR',categoria:'mantenimiento',monto:137000,descripcion:'Emergencia rotura tubería piscina'},
+    {id:'r11',mes:'Febrero',fecha:'10/02/2025',proveedor:'JASEC',categoria:'servicios_publicos',monto:205000,descripcion:'Electricidad áreas comunes'},
+    {id:'r12',mes:'Febrero',fecha:'12/02/2025',proveedor:'Jardines Verdes',categoria:'areas_verdes',monto:150000,descripcion:'Mantenimiento jardines mensual'},
+    {id:'r13',mes:'Febrero',fecha:'15/02/2025',proveedor:'Admin Los Robles',categoria:'administracion',monto:133333,descripcion:'Honorarios administración'},
+    {id:'r14',mes:'Febrero',fecha:'18/02/2025',proveedor:'LimpiezaTotal',categoria:'limpieza',monto:125000,descripcion:'Limpieza áreas comunes'},
+    {id:'r15',mes:'Febrero',fecha:'20/02/2025',proveedor:'Pinturas Nacional',categoria:'extraordinario',monto:425000,descripcion:'Pintura ext. fase 1 (asamblea)'},
+    {id:'r16',mes:'Febrero',fecha:'28/02/2025',proveedor:'Aporte Fondo Reserva',categoria:'fondo_reserva',monto:200000,descripcion:'Aporte mensual al fondo'},
+    {id:'r17',mes:'Marzo',fecha:'05/03/2025',proveedor:'Seguridad Vigente S.A.',categoria:'seguridad',monto:400000,descripcion:'Servicio mensual de seguridad'},
+    {id:'r18',mes:'Marzo',fecha:'08/03/2025',proveedor:'MantenimientoCR',categoria:'mantenimiento',monto:268000,descripcion:'Mantenimiento general'},
+    {id:'r19',mes:'Marzo',fecha:'10/03/2025',proveedor:'JASEC',categoria:'servicios_publicos',monto:212000,descripcion:'Electricidad áreas comunes'},
+    {id:'r20',mes:'Marzo',fecha:'12/03/2025',proveedor:'Jardines Verdes',categoria:'areas_verdes',monto:150000,descripcion:'Mantenimiento jardines mensual'},
+    {id:'r21',mes:'Marzo',fecha:'15/03/2025',proveedor:'Admin Los Robles',categoria:'administracion',monto:133333,descripcion:'Honorarios administración'},
+    {id:'r22',mes:'Marzo',fecha:'18/03/2025',proveedor:'LimpiezaTotal',categoria:'limpieza',monto:128000,descripcion:'Limpieza áreas comunes'},
+    {id:'r23',mes:'Marzo',fecha:'22/03/2025',proveedor:'Pinturas Nacional',categoria:'extraordinario',monto:425000,descripcion:'Pintura ext. fase 2 (asamblea)'},
+    {id:'r24',mes:'Marzo',fecha:'30/03/2025',proveedor:'Aporte Fondo Reserva',categoria:'fondo_reserva',monto:200000,descripcion:'Aporte mensual al fondo'},
+  ],
+  ingresos:[
+    {id:'i1',mes:'Enero',concepto:'Cuotas de mantenimiento',monto:1505000,detalle:'43 de 45 unidades pagaron'},
+    {id:'i2',mes:'Enero',concepto:'Intereses fondo de reserva',monto:28500,detalle:'Rendimiento bancario'},
+    {id:'i3',mes:'Febrero',concepto:'Cuotas de mantenimiento',monto:1470000,detalle:'42 de 45 unidades pagaron'},
+    {id:'i4',mes:'Febrero',concepto:'Intereses fondo de reserva',monto:29200,detalle:'Rendimiento bancario'},
+    {id:'i5',mes:'Marzo',concepto:'Cuotas de mantenimiento',monto:1505000,detalle:'43 de 45 unidades pagaron'},
+    {id:'i6',mes:'Marzo',concepto:'Intereses fondo de reserva',monto:30100,detalle:'Rendimiento bancario'},
+  ],
+  alertas:[
+    {tipo:'amarilla',titulo:'Mantenimiento cerca del límite anual',detalle:'La categoría Mantenimiento ejecutó 91% del presupuesto anual en 3 meses. Al ritmo actual se agotaría en julio.',accion:'Conviene revisarla en la próxima asamblea.'},
+    {tipo:'verde',titulo:'Pintura extraordinaria avanza según lo aprobado',detalle:'Las dos cuotas de ₡425,000 corresponden al gasto extraordinario aprobado en la asamblea de diciembre 2024.',accion:null},
+    {tipo:'amarilla',titulo:'Unidad #34 reincidente en mora',detalle:'No ha pagado febrero ni marzo. Total adeudado: ₡70,000.',accion:'Aplicar protocolo formal de cobro.'},
+  ],
+  respuestas:{
+    gasto_mas_alto:'El gasto individual más alto fue **₡425,000** en cada cuota de pintura externa (Pinturas Nacional, febrero y marzo). Sumadas: ₡850,000 — aprobado en asamblea de diciembre 2024.\n\nEl segundo más alto es seguridad: **₡400,000** mensual con Seguridad Vigente S.A.\n\nPodría ser útil preguntar en asamblea si conviene un fondo específico para emergencias técnicas.',
+    salud_presupuesto:'El presupuesto va **bien con vigilancia en una categoría**.\n\n**Lo positivo:** Cuotas cobradas al 95%+. Gastos fijos dentro de presupuesto. Aporte al fondo se mantiene.\n\n**A vigilar:** Mantenimiento consumió 91% del presupuesto anual en solo 3 meses. Si surge otra emergencia este año, se desbordaría.',
+    fondo_reserva:'El fondo tiene actualmente **₡4,250,000**.\n\nAl ritmo actual alcanzaría para **~2.6 meses** de operación completa.\n\n**Pregunta sugerida:** ¿Cuál es la meta del fondo? La práctica recomendada es al menos 3 meses de gastos operativos.',
+    variaciones_inusuales:'**Mantenimiento (febrero):** subió 61% por la emergencia de la tubería. En marzo volvió a niveles normales.\n\n**Servicios Públicos:** crecimiento gradual (₡198k→₡205k→₡212k). Normal para inicio de año.\n\n**Extraordinarios:** ₡0 enero, ₡425,000 febrero y marzo — la pintura aprobada en asamblea.',
+    preguntas_asamblea:'**1.** ¿Conviene un fondo para emergencias técnicas? Mantenimiento ya consumió 91% del presupuesto en 3 meses.\n\n**2.** ¿Meta del fondo de reserva? Hoy cubre ~2.6 meses.\n\n**3.** ¿Protocolo formal para unidad #34 (mora reincidente)?\n\n**4.** ¿Está cerrado el proyecto de pintura (₡850,000)?\n\n**5.** ¿La cuota de ₡35,000 sigue siendo suficiente?',
+  }
+};
+
+const lasPalmasData = {
+  id:'las-palmas', nombre:'Condominio Las Palmas',
+  unidades:28, cuota:40000, fondo_reserva_actual:1850000,
+  presupuesto_anual_gastos:13000000, presupuesto_anual_ingresos:13940000,
+  meses_disponibles:['Enero','Febrero'],
+  presupuestos:{ seguridad:3360000,mantenimiento:2100000,areas_verdes:1200000,servicios_publicos:1680000,administracion:1080000,fondo_reserva:1560000,limpieza:960000,extraordinario:600000 },
+  morosos:[{unidad:'#15',meses:['Enero','Febrero'],monto:80000,reincidente:true}],
+  gastos:[
+    {id:'p1',mes:'Enero',fecha:'05/01/2025',proveedor:'Vigilancia Pacífica',categoria:'seguridad',monto:280000,descripcion:'Servicio mensual de seguridad'},
+    {id:'p2',mes:'Enero',fecha:'08/01/2025',proveedor:'ServiTec CR',categoria:'mantenimiento',monto:175000,descripcion:'Mantenimiento general'},
+    {id:'p3',mes:'Enero',fecha:'10/01/2025',proveedor:'CNFL',categoria:'servicios_publicos',monto:138000,descripcion:'Electricidad áreas comunes'},
+    {id:'p4',mes:'Enero',fecha:'12/01/2025',proveedor:'JardinPro',categoria:'areas_verdes',monto:98000,descripcion:'Mantenimiento jardines'},
+    {id:'p5',mes:'Enero',fecha:'15/01/2025',proveedor:'Admin Las Palmas',categoria:'administracion',monto:90000,descripcion:'Honorarios administración'},
+    {id:'p6',mes:'Enero',fecha:'18/01/2025',proveedor:'CleanWay',categoria:'limpieza',monto:78000,descripcion:'Limpieza áreas comunes'},
+    {id:'p7',mes:'Enero',fecha:'30/01/2025',proveedor:'Aporte Fondo Reserva',categoria:'fondo_reserva',monto:130000,descripcion:'Aporte mensual al fondo'},
+    {id:'p8',mes:'Febrero',fecha:'05/02/2025',proveedor:'Vigilancia Pacífica',categoria:'seguridad',monto:280000,descripcion:'Servicio mensual de seguridad'},
+    {id:'p9',mes:'Febrero',fecha:'08/02/2025',proveedor:'ServiTec CR',categoria:'mantenimiento',monto:180000,descripcion:'Mantenimiento general'},
+    {id:'p10',mes:'Febrero',fecha:'11/02/2025',proveedor:'BombasYAgua S.A.',categoria:'extraordinario',monto:580000,descripcion:'EMERGENCIA: reemplazo bomba de agua'},
+    {id:'p11',mes:'Febrero',fecha:'12/02/2025',proveedor:'CNFL',categoria:'servicios_publicos',monto:142000,descripcion:'Electricidad áreas comunes'},
+    {id:'p12',mes:'Febrero',fecha:'14/02/2025',proveedor:'JardinPro',categoria:'areas_verdes',monto:100000,descripcion:'Mantenimiento jardines'},
+    {id:'p13',mes:'Febrero',fecha:'15/02/2025',proveedor:'Admin Las Palmas',categoria:'administracion',monto:90000,descripcion:'Honorarios administración'},
+    {id:'p14',mes:'Febrero',fecha:'18/02/2025',proveedor:'CleanWay',categoria:'limpieza',monto:80000,descripcion:'Limpieza áreas comunes'},
+    {id:'p15',mes:'Febrero',fecha:'28/02/2025',proveedor:'Aporte Fondo Reserva',categoria:'fondo_reserva',monto:130000,descripcion:'Aporte mensual al fondo'},
+  ],
+  ingresos:[
+    {id:'lp1',mes:'Enero',concepto:'Cuotas de mantenimiento',monto:1080000,detalle:'27 de 28 unidades pagaron'},
+    {id:'lp2',mes:'Enero',concepto:'Intereses fondo de reserva',monto:12500,detalle:'Rendimiento bancario'},
+    {id:'lp3',mes:'Febrero',concepto:'Cuotas de mantenimiento',monto:1080000,detalle:'27 de 28 unidades pagaron'},
+    {id:'lp4',mes:'Febrero',concepto:'Intereses fondo de reserva',monto:12800,detalle:'Rendimiento bancario'},
+  ],
+  alertas:[
+    {tipo:'roja',titulo:'Déficit operativo en febrero',detalle:'Los gastos (₡1,582,000) superaron los ingresos (₡1,092,800). Diferencia cubierta con fondo de reserva por la emergencia de la bomba.',accion:'Evaluar en asamblea cómo reponer el fondo.'},
+    {tipo:'roja',titulo:'Fondo de reserva impactado',detalle:'Después de la emergencia, el fondo cubre apenas ~3 meses al ritmo actual.',accion:'Considerar plan de reposición.'},
+    {tipo:'amarilla',titulo:'Unidad #15 reincidente en mora',detalle:'No ha pagado enero ni febrero. Total adeudado: ₡80,000.',accion:'Aplicar protocolo formal de cobro.'},
+  ],
+  respuestas:{
+    gasto_mas_alto:'El gasto más alto fue **₡580,000** en febrero — el reemplazo de emergencia de la bomba de agua (BombasYAgua S.A.).\n\nEste gasto **no estaba presupuestado** y se cubrió con el fondo de reserva.\n\nPodría ser útil preguntar en asamblea: ¿qué protocolo de mantenimiento preventivo aplica a equipos críticos?',
+    salud_presupuesto:'El condominio está en una **situación delicada que merece atención**.\n\nEn febrero los gastos superaron los ingresos por ₡490,000 por la emergencia de la bomba. El fondo absorbió el golpe pero ahora cubre solo ~3 meses.\n\n**Para la asamblea:** ¿hay un plan para reponer el fondo de reserva?',
+    fondo_reserva:'El fondo está en **₡1,850,000** después del impacto de la emergencia.\n\nAl ritmo actual cubre **~3 meses** de operación — justo en el mínimo aceptable.\n\n**Pregunta sugerida:** ¿conviene aprobar un aporte extraordinario para reponer el fondo?',
+    variaciones_inusuales:'**Extraordinarios (febrero):** pasó de ₡0 a ₡580,000 — la emergencia de la bomba. Representa el 44% del total gastado en febrero.\n\nLas demás categorías varían menos del 5% mes a mes. No hay variaciones sospechosas.\n\n**Para la asamblea:** ¿qué otros equipos críticos podrían necesitar atención preventiva?',
+    preguntas_asamblea:'**1.** ¿Cómo se repone el fondo de reserva tras el impacto de ₡580,000?\n\n**2.** ¿Hay plan de mantenimiento preventivo para equipos críticos?\n\n**3.** ¿Conviene cuota extraordinaria o ajustar la mensual?\n\n**4.** ¿Protocolo formal para unidad #15 (₡80,000 en mora)?\n\n**5.** ¿Meta concreta para el fondo de reserva? Hoy cubre solo 3 meses.',
+  }
+};
+
+const CONDOS = { 'los-robles': losRoblesData, 'las-palmas': lasPalmasData };
+
+const fCRC = (n) => `₡${Math.round(n).toLocaleString('es-CR')}`;
+const fShort = (n) => n >= 1000000 ? `₡${(n/1000000).toFixed(1)}M` : n >= 1000 ? `₡${(n/1000).toFixed(0)}k` : `₡${n}`;
+const fPct = (n) => `${n>=0?'+':''}${n.toFixed(1)}%`;
+
+const calcMetrics = (data) => {
+  const totalGastos = data.gastos.reduce((s,g)=>s+g.monto,0);
+  const totalIngresos = data.ingresos.reduce((s,i)=>s+i.monto,0);
+  const mesesEjecutados = data.meses_disponibles.length;
+  const promedioMensual = totalGastos / mesesEjecutados;
+  const proyeccionAnual = promedioMensual * 12;
+  const superavit = totalIngresos - totalGastos;
+  const totalMorosidad = data.morosos.reduce((s,m)=>s+m.monto,0);
+  const cuotaPotencial = data.unidades * data.cuota;
+  const intereses = data.ingresos.filter(i=>i.concepto.includes('Intereses')).reduce((s,i)=>s+i.monto,0);
+  const tasaCobro = (totalIngresos - intereses) / (cuotaPotencial * mesesEjecutados);
+  const mesesCobertura = data.fondo_reserva_actual / promedioMensual;
+  const porCategoria = {};
+  Object.keys(CATEGORY_LABELS).forEach(cat => { porCategoria[cat] = data.gastos.filter(g=>g.categoria===cat).reduce((s,g)=>s+g.monto,0); });
+  const porMes = data.meses_disponibles.map(mes => ({
+    mes,
+    gastos: data.gastos.filter(g=>g.mes===mes).reduce((s,g)=>s+g.monto,0),
+    ingresos: data.ingresos.filter(i=>i.mes===mes).reduce((s,i)=>s+i.monto,0),
+  }));
+  return { totalGastos,totalIngresos,mesesEjecutados,promedioMensual,proyeccionAnual,superavit,totalMorosidad,tasaCobro,mesesCobertura,porCategoria,porMes };
+};
+
+const getSalud = (data,m) => {
+  const tieneRoja = data.alertas.some(a=>a.tipo==='roja');
+  const fondoCorto = m.mesesCobertura < 3;
+  const ej = m.proyeccionAnual / data.presupuesto_anual_gastos;
+  if(tieneRoja||fondoCorto||ej>1.05) return {nivel:'rojo',label:'Atención requerida',color:C.red,icon:'⚠️'};
+  if(ej>0.95||data.alertas.some(a=>a.tipo==='amarilla')) return {nivel:'amarillo',label:'Bajo vigilancia',color:C.yellow,icon:'📊'};
+  return {nivel:'verde',label:'Saludable',color:C.green,icon:'✓'};
+};
+
+const Card = ({children,className='',accent=false,padding='p-6'}) => (
+  <div className={`bg-white rounded-lg ${padding} ${className}`} style={{boxShadow:'0 1px 3px rgba(15,39,68,0.06)',border:`1px solid ${C.border}`,borderTop:accent?`3px solid ${C.gold}`:'none'}}>
+    {children}
+  </div>
+);
+
+const KPI = ({label,value,sublabel,color,icon}) => (
+  <Card padding="p-5">
+    <div className="flex items-center gap-2 mb-2">
+      {icon && <span style={{fontSize:'14px'}}>{icon}</span>}
+      <span className="text-xs uppercase tracking-wider font-medium" style={{color:C.mute,fontFamily:'Geist',letterSpacing:'0.08em'}}>{label}</span>
+    </div>
+    <div className="font-semibold leading-none mb-1.5" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.75rem',color:color||C.navy,fontFeatureSettings:'"tnum"',letterSpacing:'-0.02em'}}>{value}</div>
+    {sublabel && <div className="text-xs" style={{color:C.mute,fontFamily:'Geist'}}>{sublabel}</div>}
+  </Card>
+);
+
+const SectionTitle = ({children,subtitle,kicker}) => (
+  <div className="mb-6">
+    {kicker && <div className="text-xs uppercase tracking-widest mb-2 font-medium" style={{color:C.gold,fontFamily:'Geist',letterSpacing:'0.15em'}}>{kicker}</div>}
+    <h2 className="leading-tight mb-1" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.75rem',fontWeight:500,color:C.navy,letterSpacing:'-0.02em'}}>{children}</h2>
+    {subtitle && <p className="text-sm" style={{color:C.mute,fontFamily:'Geist'}}>{subtitle}</p>}
+  </div>
+);
+
+const AlertCard = ({alert}) => {
+  const cfg = {
+    verde:{bg:'#f0fdf4',border:C.green,icon:'✓'},
+    amarilla:{bg:'#fffbeb',border:C.yellow,icon:'⚠'},
+    roja:{bg:'#fef2f2',border:C.red,icon:'⚠'},
+  }[alert.tipo];
+  return (
+    <div className="p-4 rounded-lg border-l-4" style={{background:cfg.bg,borderColor:cfg.border}}>
+      <div className="flex gap-3">
+        <span style={{color:cfg.border,flexShrink:0,marginTop:2,fontSize:'16px'}}>{cfg.icon}</span>
+        <div>
+          <div className="font-semibold mb-1" style={{color:C.ink,fontFamily:'Geist',fontSize:'0.9rem'}}>{alert.titulo}</div>
+          <div className="text-sm leading-relaxed mb-2" style={{color:'#475569',fontFamily:'Geist'}}>{alert.detalle}</div>
+          {alert.accion && <div className="text-xs font-medium uppercase tracking-wide" style={{color:cfg.border,fontFamily:'Geist'}}>→ {alert.accion}</div>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TabResumen = ({data,metrics}) => {
+  const salud = getSalud(data,metrics);
+  const datosTorta = Object.keys(metrics.porCategoria).filter(k=>metrics.porCategoria[k]>0).map(k=>({name:CATEGORY_LABELS[k],value:metrics.porCategoria[k],color:CATEGORY_COLORS[k]}));
+  return (
+    <div className="space-y-8">
+      <Card accent padding="p-8">
+        <div className="grid md:grid-cols-3 gap-6 items-center">
+          <div>
+            <div className="text-xs uppercase tracking-widest mb-3 font-medium" style={{color:C.gold,fontFamily:'Geist',letterSpacing:'0.15em'}}>Salud financiera</div>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0" style={{background:`${salud.color}15`,border:`2px solid ${salud.color}`,fontSize:'28px'}}>{salud.icon}</div>
+              <div>
+                <div className="text-2xl font-medium" style={{fontFamily:'"Fraunces",Georgia,serif',color:salud.color}}>{salud.label}</div>
+                <div className="text-xs mt-1" style={{color:C.mute,fontFamily:'Geist'}}>Enero – {data.meses_disponibles[data.meses_disponibles.length-1].toLowerCase()} 2025</div>
+              </div>
+            </div>
+          </div>
+          <div className="md:col-span-2 grid grid-cols-2 gap-6 md:pl-8 md:border-l" style={{borderColor:C.border}}>
+            <div>
+              <div className="text-xs uppercase tracking-wider mb-2" style={{color:C.mute,fontFamily:'Geist'}}>Total ejecutado</div>
+              <div className="text-3xl font-medium" style={{fontFamily:'"Fraunces",Georgia,serif',color:C.navy,fontFeatureSettings:'"tnum"'}}>{fCRC(metrics.totalGastos)}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider mb-2" style={{color:C.mute,fontFamily:'Geist'}}>Balance</div>
+              <div className="text-3xl font-medium" style={{fontFamily:'"Fraunces",Georgia,serif',color:metrics.superavit>=0?C.green:C.red,fontFeatureSettings:'"tnum"'}}>{metrics.superavit>=0?'+':''}{fCRC(metrics.superavit)}</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <KPI label="Promedio mensual" value={fCRC(metrics.promedioMensual)} sublabel={`${metrics.mesesEjecutados} meses ejecutados`} icon="📈" />
+        <KPI label="Proyección anual" value={fCRC(metrics.proyeccionAnual)} sublabel={`vs ₡${(data.presupuesto_anual_gastos/1000000).toFixed(1)}M presupuestado`} color={metrics.proyeccionAnual>data.presupuesto_anual_gastos?C.red:C.navy} icon="🎯" />
+        <KPI label="Fondo de reserva" value={fCRC(data.fondo_reserva_actual)} sublabel={`${metrics.mesesCobertura.toFixed(1)} meses de cobertura`} color={metrics.mesesCobertura<3?C.red:C.green} icon="🏦" />
+        <KPI label="Total ingresado" value={fCRC(metrics.totalIngresos)} sublabel={`Tasa de cobro ${(metrics.tasaCobro*100).toFixed(1)}%`} icon="💰" />
+        <KPI label="Morosidad activa" value={fCRC(metrics.totalMorosidad)} sublabel={`${data.morosos.length} unidades en mora`} color={metrics.totalMorosidad>0?C.yellow:C.green} icon="⚠️" />
+        <KPI label="Unidades pagando" value={`${data.unidades-data.morosos.length}/${data.unidades}`} sublabel={`Cuota ${fCRC(data.cuota)}`} icon="🏠" />
+      </div>
+
+      {data.alertas.length>0 && (
+        <div>
+          <SectionTitle kicker="Atención" subtitle="Cosas que conviene tener presentes">Alertas activas</SectionTitle>
+          <div className="space-y-3">{data.alertas.map((a,i)=><AlertCard key={i} alert={a}/>)}</div>
+        </div>
+      )}
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <h3 className="font-medium mb-4" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.15rem',color:C.navy}}>Gastos vs Ingresos mensuales</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={metrics.porMes}>
+              <defs>
+                <linearGradient id="gI" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.green} stopOpacity={0.3}/><stop offset="100%" stopColor={C.green} stopOpacity={0.02}/></linearGradient>
+                <linearGradient id="gG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.gold} stopOpacity={0.35}/><stop offset="100%" stopColor={C.gold} stopOpacity={0.02}/></linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+              <XAxis dataKey="mes" tick={{fontSize:12,fill:C.mute}}/>
+              <YAxis tick={{fontSize:11,fill:C.mute}} tickFormatter={fShort}/>
+              <Tooltip formatter={(v)=>fCRC(v)} contentStyle={{background:'white',border:`1px solid ${C.border}`,borderRadius:8}}/>
+              <Legend/>
+              <Area type="monotone" dataKey="ingresos" stroke={C.green} fill="url(#gI)" strokeWidth={2} name="Ingresos"/>
+              <Area type="monotone" dataKey="gastos" stroke={C.gold} fill="url(#gG)" strokeWidth={2} name="Gastos"/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <h3 className="font-medium mb-4" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.15rem',color:C.navy}}>Distribución del gasto</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie data={datosTorta} cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2} dataKey="value">
+                {datosTorta.map((e,i)=><Cell key={i} fill={e.color}/>)}
+              </Pie>
+              <Tooltip formatter={(v)=>fCRC(v)} contentStyle={{background:'white',border:`1px solid ${C.border}`,borderRadius:8}}/>
+              <Legend iconType="circle" layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize:11}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const TabGastos = ({data,metrics}) => {
+  const top10 = [...data.gastos].sort((a,b)=>b.monto-a.monto).slice(0,10);
+  const maxM = top10[0].monto;
+  const ejecucion = Object.keys(data.presupuestos).map(cat=>{
+    const ej = metrics.porCategoria[cat];
+    const pres = (data.presupuestos[cat]/12)*metrics.mesesEjecutados;
+    const pct = pres>0?(ej/pres)*100:0;
+    let estado='verde'; if(pct>100) estado='rojo'; else if(pct>85) estado='amarillo';
+    return {cat,label:CATEGORY_LABELS[cat],ej,pres,pct,estado};
+  }).sort((a,b)=>b.pct-a.pct);
+  const ec={verde:C.green,amarillo:C.yellow,rojo:C.red};
+  return (
+    <div className="space-y-8">
+      <div>
+        <SectionTitle kicker="Ranking" subtitle="Las diez facturas más altas del período">Top 10 facturas</SectionTitle>
+        <Card padding="p-6">
+          <div className="space-y-3">
+            {top10.map((g,i)=>{
+              const pct=(g.monto/maxM)*100;
+              const medal=i===0?C.gold:i===1?'#94a3b8':i===2?'#cd7f32':null;
+              return (
+                <div key={g.id} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{background:medal||'#f1f5f9',color:medal?'white':C.mute}}>{i+1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <div className="text-sm font-medium truncate" style={{color:C.ink,fontFamily:'Geist'}}>{g.proveedor}</div>
+                      <div className="text-sm font-semibold flex-shrink-0" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{fCRC(g.monto)}</div>
+                    </div>
+                    <div className="relative h-1.5 rounded-full overflow-hidden" style={{background:'#f1f5f9'}}>
+                      <div className="absolute inset-y-0 left-0 rounded-full" style={{width:`${pct}%`,background:CATEGORY_COLORS[g.categoria]}}/>
+                    </div>
+                    <div className="flex gap-3 mt-1 text-xs" style={{color:C.mute}}><span>{g.mes}</span><span>·</span><span>{CATEGORY_LABELS[g.categoria]}</span></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+      <div>
+        <SectionTitle kicker="Presupuesto" subtitle={`Proporcional al mes ${metrics.mesesEjecutados} de 12`}>Ejecución por categoría</SectionTitle>
+        <Card padding="p-6">
+          <div className="space-y-5">
+            {ejecucion.map(e=>(
+              <div key={e.cat}>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full" style={{background:ec[e.estado]}}/><span className="text-sm font-medium" style={{color:C.ink,fontFamily:'Geist'}}>{e.label}</span></div>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-xs" style={{color:C.mute}}>{fCRC(e.ej)} de {fCRC(e.pres)}</span>
+                    <span className="font-semibold text-sm" style={{color:ec[e.estado],fontFamily:'"Fraunces",Georgia,serif'}}>{e.pct.toFixed(0)}%</span>
+                  </div>
+                </div>
+                <div className="relative h-2.5 rounded-full overflow-hidden" style={{background:'#f1f5f9'}}>
+                  <div className="absolute inset-y-0 left-0 rounded-full" style={{width:`${Math.min(e.pct,100)}%`,background:ec[e.estado]}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const TabVariaciones = ({data,metrics}) => {
+  const meses = data.meses_disponibles;
+  if(meses.length<2) return <Card><div className="text-center py-12"><div style={{fontSize:48}}>📊</div><h3 className="text-lg font-medium mt-4" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif'}}>Se necesitan al menos dos meses</h3></div></Card>;
+  const ult = meses[meses.length-1], ant = meses[meses.length-2];
+  const vars = Object.keys(CATEGORY_LABELS).map(cat=>{
+    const actual = data.gastos.filter(g=>g.mes===ult&&g.categoria===cat).reduce((s,g)=>s+g.monto,0);
+    const anterior = data.gastos.filter(g=>g.mes===ant&&g.categoria===cat).reduce((s,g)=>s+g.monto,0);
+    const pct = anterior>0?((actual-anterior)/anterior)*100:actual>0?100:0;
+    return {cat,label:CATEGORY_LABELS[cat],actual,anterior,pct};
+  }).filter(v=>v.actual>0||v.anterior>0);
+  const comparacion = vars.map(v=>({cat:v.label,[ant]:v.anterior,[ult]:v.actual}));
+  const evolucion = meses.map(mes=>{
+    const item={mes};
+    Object.keys(CATEGORY_LABELS).forEach(cat=>{item[CATEGORY_LABELS[cat]]=data.gastos.filter(g=>g.mes===mes&&g.categoria===cat).reduce((s,g)=>s+g.monto,0);});
+    return item;
+  });
+  return (
+    <div className="space-y-8">
+      <div>
+        <SectionTitle kicker="Mes a mes" subtitle={`${ant} vs ${ult} 2025`}>Variaciones por categoría</SectionTitle>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {vars.map(v=>{
+            const subio=v.pct>0, sig=Math.abs(v.pct)>=20;
+            return (
+              <Card key={v.cat} padding="p-4">
+                <div className="text-xs uppercase tracking-wide mb-1" style={{color:C.mute,fontFamily:'Geist'}}>{v.label}</div>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <div className="text-xl font-semibold" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif'}}>{fShort(v.actual)}</div>
+                  {v.pct!==0 && <div className="flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded" style={{color:subio?C.red:C.green,background:subio?'#fee2e2':'#dcfce7'}}>{subio?'↑':'↓'}{fPct(v.pct)}</div>}
+                </div>
+                <div className="text-xs" style={{color:C.mute}}>vs {fShort(v.anterior)} en {ant.toLowerCase()}</div>
+                {sig && <div className="mt-2 pt-2 border-t text-xs" style={{borderColor:C.border,color:C.yellow}}>⚠ Variación significativa</div>}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <h3 className="font-medium mb-4" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.15rem',color:C.navy}}>{ant} vs {ult}</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={comparacion} layout="vertical" margin={{left:20}}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
+              <XAxis type="number" tick={{fontSize:11,fill:C.mute}} tickFormatter={fShort}/>
+              <YAxis dataKey="cat" type="category" tick={{fontSize:11,fill:C.mute}} width={110}/>
+              <Tooltip formatter={(v)=>fCRC(v)} contentStyle={{background:'white',border:`1px solid ${C.border}`,borderRadius:8}}/>
+              <Legend/>
+              <Bar dataKey={ant} fill={C.navyLight} radius={[0,4,4,0]}/>
+              <Bar dataKey={ult} fill={C.gold} radius={[0,4,4,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+        <Card>
+          <h3 className="font-medium mb-4" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.15rem',color:C.navy}}>Evolución mensual</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={evolucion}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+              <XAxis dataKey="mes" tick={{fontSize:12,fill:C.mute}}/>
+              <YAxis tick={{fontSize:11,fill:C.mute}} tickFormatter={fShort}/>
+              <Tooltip formatter={(v)=>fCRC(v)} contentStyle={{background:'white',border:`1px solid ${C.border}`,borderRadius:8}}/>
+              <Legend wrapperStyle={{fontSize:10}}/>
+              {Object.keys(CATEGORY_LABELS).filter(cat=>metrics.porCategoria[cat]>0).map(cat=>(
+                <Line key={cat} type="monotone" dataKey={CATEGORY_LABELS[cat]} stroke={CATEGORY_COLORS[cat]} strokeWidth={2} dot={{r:3}}/>
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const TabProyeccion = ({data,metrics}) => {
+  const proy = Object.keys(data.presupuestos).map(cat=>{
+    const ej=metrics.porCategoria[cat];
+    const p=(ej/metrics.mesesEjecutados)*12;
+    const pres=data.presupuestos[cat];
+    const diff=pres-p;
+    let estado='verde'; if(p>pres*1.05) estado='rojo'; else if(p>pres*0.95) estado='amarillo';
+    return {cat,label:CATEGORY_LABELS[cat],ej,p,pres,diff,estado};
+  });
+  const ec={verde:C.green,amarillo:C.yellow,rojo:C.red};
+  const el={verde:'Dentro',amarillo:'Apretado',rojo:'Excede'};
+  const deficit=data.presupuesto_anual_gastos-metrics.proyeccionAnual;
+  const grafico=proy.map(p=>({cat:p.label,Presupuesto:p.pres,Proyección:p.p}));
+  return (
+    <div className="space-y-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPI label="Presupuesto aprobado" value={fCRC(data.presupuesto_anual_gastos)} sublabel="Total anual" icon="🎯"/>
+        <KPI label="Proyección actual" value={fCRC(metrics.proyeccionAnual)} sublabel={`${metrics.mesesEjecutados} meses`} color={metrics.proyeccionAnual>data.presupuesto_anual_gastos?C.red:C.navy} icon="📈"/>
+        <KPI label={deficit>=0?'Ahorro proyectado':'Déficit proyectado'} value={fCRC(Math.abs(deficit))} sublabel="vs presupuesto" color={deficit>=0?C.green:C.red} icon={deficit>=0?'✅':'❗'}/>
+        <KPI label="Cobertura del fondo" value={`${metrics.mesesCobertura.toFixed(1)} meses`} sublabel="Al ritmo actual" color={metrics.mesesCobertura<3?C.red:metrics.mesesCobertura<6?C.yellow:C.green} icon="🏦"/>
+      </div>
+      <div>
+        <SectionTitle kicker="Proyección" subtitle="Si el ritmo de gasto continúa igual">Detalle por categoría</SectionTitle>
+        <Card padding="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead><tr style={{background:'#f8fafc'}}>
+                {['Categoría','Presupuesto','Ejecutado','Proyección','Diferencia','Estado'].map(h=>(
+                  <th key={h} className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium" style={{color:C.mute,fontFamily:'Geist'}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {proy.map(p=>(
+                  <tr key={p.cat} style={{borderTop:`1px solid ${C.border}`}}>
+                    <td className="px-5 py-3.5 text-sm font-medium" style={{color:C.ink,fontFamily:'Geist'}}>{p.label}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{color:C.mute,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{fCRC(p.pres)}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{color:C.ink,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{fCRC(p.ej)}</td>
+                    <td className="px-5 py-3.5 text-sm font-semibold" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{fCRC(p.p)}</td>
+                    <td className="px-5 py-3.5 text-sm" style={{color:p.diff>=0?C.green:C.red,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{p.diff>=0?'+':''}{fCRC(p.diff)}</td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium" style={{color:ec[p.estado],background:`${ec[p.estado]}15`,fontFamily:'Geist'}}>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{background:ec[p.estado]}}/>{el[p.estado]}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+      <Card>
+        <h3 className="font-medium mb-4" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.15rem',color:C.navy}}>Presupuesto vs proyección</h3>
+        <ResponsiveContainer width="100%" height={320}>
+          <BarChart data={grafico} margin={{bottom:60}}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+            <XAxis dataKey="cat" tick={{fontSize:10,fill:C.mute}} angle={-25} textAnchor="end" height={70}/>
+            <YAxis tick={{fontSize:11,fill:C.mute}} tickFormatter={fShort}/>
+            <Tooltip formatter={(v)=>fCRC(v)} contentStyle={{background:'white',border:`1px solid ${C.border}`,borderRadius:8}}/>
+            <Legend/>
+            <Bar dataKey="Presupuesto" fill={C.navyLight} radius={[6,6,0,0]}/>
+            <Bar dataKey="Proyección" fill={C.gold} radius={[6,6,0,0]}/>
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+    </div>
+  );
+};
+
+const TabFacturas = ({data}) => {
+  const [filtroMes,setFiltroMes]=useState('todos');
+  const [filtroCat,setFiltroCat]=useState('todas');
+  const [orden,setOrden]=useState('monto');
+  let facturas=[...data.gastos];
+  if(filtroMes!=='todos') facturas=facturas.filter(f=>f.mes===filtroMes);
+  if(filtroCat!=='todas') facturas=facturas.filter(f=>f.categoria===filtroCat);
+  if(orden==='monto') facturas.sort((a,b)=>b.monto-a.monto);
+  else facturas.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const total=facturas.reduce((s,f)=>s+f.monto,0);
+  const conAlerta=new Set(['r10','r15','r23','p10']);
+  const sel={borderColor:C.border,fontFamily:'Geist',color:C.ink,padding:'8px 12px',fontSize:'14px',borderRadius:'6px',border:`1px solid ${C.border}`};
+  return (
+    <div className="space-y-6">
+      <SectionTitle kicker="Detalle" subtitle={`${facturas.length} facturas — ${fCRC(total)} total`}>Todas las facturas</SectionTitle>
+      <Card padding="p-4">
+        <div className="flex flex-wrap gap-3">
+          <select value={filtroMes} onChange={e=>setFiltroMes(e.target.value)} style={sel}>
+            <option value="todos">Todos los meses</option>
+            {data.meses_disponibles.map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={filtroCat} onChange={e=>setFiltroCat(e.target.value)} style={sel}>
+            <option value="todas">Todas las categorías</option>
+            {Object.entries(CATEGORY_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+          </select>
+          <select value={orden} onChange={e=>setOrden(e.target.value)} style={sel}>
+            <option value="monto">Por monto</option>
+            <option value="fecha">Por fecha</option>
+          </select>
+        </div>
+      </Card>
+      <Card padding="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead><tr style={{background:'#f8fafc'}}>
+              {['Fecha','Proveedor','Categoría','Descripción','Monto'].map(h=>(
+                <th key={h} className="text-left px-5 py-3 text-xs uppercase tracking-wider font-medium" style={{color:C.mute,fontFamily:'Geist'}}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {facturas.map(f=>(
+                <tr key={f.id} style={{borderTop:`1px solid ${C.border}`,background:conAlerta.has(f.id)?'#fffbeb':'white'}}>
+                  <td className="px-5 py-3 text-sm" style={{color:C.mute,fontFamily:'Geist'}}>{f.fecha}</td>
+                  <td className="px-5 py-3 text-sm font-medium" style={{color:C.ink,fontFamily:'Geist'}}>
+                    {conAlerta.has(f.id)?'⚠ ':''}{f.proveedor}
+                  </td>
+                  <td className="px-5 py-3 text-xs">
+                    <span className="px-2 py-0.5 rounded text-xs font-medium" style={{color:CATEGORY_COLORS[f.categoria],background:`${CATEGORY_COLORS[f.categoria]}15`,fontFamily:'Geist'}}>{CATEGORY_LABELS[f.categoria]}</span>
+                  </td>
+                  <td className="px-5 py-3 text-sm" style={{color:C.mute,fontFamily:'Geist'}}>{f.descripcion}</td>
+                  <td className="px-5 py-3 text-sm text-right font-semibold" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif',fontFeatureSettings:'"tnum"'}}>{fCRC(f.monto)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr style={{background:C.navy,color:'white'}}>
+              <td colSpan={4} className="px-5 py-3 text-sm font-semibold uppercase tracking-wider" style={{fontFamily:'Geist'}}>Total</td>
+              <td className="px-5 py-3 text-right" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.05rem',fontWeight:600,fontFeatureSettings:'"tnum"'}}>{fCRC(total)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const TabChat = ({data,metrics}) => {
+  const LIMITE=5;
+  const [msgs,setMsgs]=useState([{role:'assistant',content:`Hola, soy el asistente de **${data.nombre}**. Preguntame lo que quieras sobre los gastos, presupuesto o fondo de reserva.`}]);
+  const [input,setInput]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [uso,setUso]=useState(0);
+  const ref=useRef(null);
+  const sugeridas=[
+    {key:'gasto_mas_alto',label:'¿Cuál fue el gasto más alto?'},
+    {key:'salud_presupuesto',label:'¿Vamos bien con el presupuesto?'},
+    {key:'fondo_reserva',label:'¿Cuánto dura el fondo de reserva?'},
+    {key:'variaciones_inusuales',label:'¿Dónde hay variaciones inusuales?'},
+    {key:'preguntas_asamblea',label:'¿Qué preguntar en asamblea?'},
+  ];
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[msgs,loading]);
+  const enviarSug=(key,label)=>setMsgs(p=>[...p,{role:'user',content:label},{role:'assistant',content:data.respuestas[key],pre:true}]);
+  const enviar=async()=>{
+    if(!input.trim()||loading||uso>=LIMITE) return;
+    const q=input.trim(); setInput('');
+    setMsgs(p=>[...p,{role:'user',content:q}]); setLoading(true);
+    try{
+      const res=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-20250514',max_tokens:1024,
+          system:`Sos un asistente financiero de CondoSmart para ${data.nombre}. Respondés en español costarricense, máximo 3 párrafos cortos. Nunca acusés a la administración. Datos: ${JSON.stringify({total_gastos:metrics.totalGastos,total_ingresos:metrics.totalIngresos,fondo:data.fondo_reserva_actual,morosos:data.morosos,categorias:metrics.porCategoria})}`,
+          messages:[{role:'user',content:q}]
+        })
+      });
+      const d=await res.json();
+      setMsgs(p=>[...p,{role:'assistant',content:d.content.filter(b=>b.type==='text').map(b=>b.text).join('\n')}]);
+      setUso(u=>u+1);
+    }catch{
+      setMsgs(p=>[...p,{role:'assistant',content:'Disculpá, hubo un error. Probá con las preguntas sugeridas.',err:true}]);
+    }finally{setLoading(false);}
+  };
+  const fmt=(t)=>t.split('\n').map((l,i)=>{
+    const parts=l.split(/(\*\*[^*]+\*\*)/g).map((p,j)=>p.startsWith('**')&&p.endsWith('**')?<strong key={j} style={{color:C.navy}}>{p.slice(2,-2)}</strong>:p);
+    return <div key={i} className={i>0?'mt-1':''}>{parts}</div>;
+  });
+  return (
+    <div className="grid lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2">
+        <Card padding="p-0" className="overflow-hidden">
+          <div className="px-6 py-4 flex items-center gap-3" style={{background:`linear-gradient(135deg,${C.navy},${C.navyLight})`,color:'white'}}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{background:`${C.gold}30`,border:`1px solid ${C.gold}`,fontSize:'18px'}}>✨</div>
+            <div>
+              <div className="font-medium" style={{fontFamily:'"Fraunces",Georgia,serif'}}>Asistente CondoSmart</div>
+              <div className="text-xs opacity-80">Sugeridas: gratis · Personalizadas: {uso}/{LIMITE} hoy</div>
+            </div>
+          </div>
+          <div ref={ref} className="h-96 overflow-y-auto px-6 py-4 space-y-4" style={{background:'#fafafa'}}>
+            {msgs.map((m,i)=>(
+              <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'}`}>
+                <div className="max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed" style={{background:m.role==='user'?C.navy:'white',color:m.role==='user'?'white':C.ink,border:m.role==='assistant'?`1px solid ${C.border}`:'none',borderBottomRightRadius:m.role==='user'?4:16,borderBottomLeftRadius:m.role==='assistant'?4:16}}>
+                  {fmt(m.content)}
+                  {m.pre&&<div className="text-xs mt-2 opacity-50 italic">Respuesta precalculada</div>}
+                </div>
+              </div>
+            ))}
+            {loading&&<div className="flex justify-start"><div className="px-4 py-3 rounded-2xl" style={{background:'white',border:`1px solid ${C.border}`}}><div className="flex gap-1">{[0,1,2].map(i=><div key={i} className="w-2 h-2 rounded-full pulse" style={{background:C.navy}}/>)}</div></div></div>}
+          </div>
+          <div className="px-4 py-3 border-t flex gap-2" style={{borderColor:C.border,background:'white'}}>
+            <input type="text" value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&enviar()} placeholder={uso>=LIMITE?'Límite alcanzado...':'Escribí tu pregunta...'} disabled={loading||uso>=LIMITE} className="flex-1 px-4 py-2 text-sm rounded-lg border focus:outline-none disabled:opacity-50" style={{borderColor:C.border,fontFamily:'Geist'}}/>
+            <button onClick={enviar} disabled={!input.trim()||loading||uso>=LIMITE} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-40" style={{background:C.navy,color:'white',fontFamily:'Geist'}}>
+              ➤ Enviar
+            </button>
+          </div>
+        </Card>
+      </div>
+      <div>
+        <Card>
+          <h3 className="font-medium mb-1" style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.05rem',color:C.navy}}>Preguntas sugeridas</h3>
+          <p className="text-xs mb-4" style={{color:C.mute}}>Respuestas instantáneas, sin costo</p>
+          <div className="space-y-2">
+            {sugeridas.map(p=>(
+              <button key={p.key} onClick={()=>enviarSug(p.key,p.label)} className="w-full text-left px-3 py-2.5 text-sm rounded-lg border hover:bg-gray-50 transition" style={{borderColor:C.border,color:C.ink,fontFamily:'Geist'}}>
+                ✨ {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-5 pt-5 border-t text-xs" style={{borderColor:C.border,color:C.mute}}>
+            ℹ El asistente nunca acusa a nadie. Siempre sugiere qué preguntas valen la pena para la asamblea.
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const TabValoracion = () => {
+  const [form,setForm]=useState({valorDeclarado:'',m2C:'',m2T:'',anio:2018,provincia:'San José',acabados:'medio',parqueos:1,amenidades:['piscina'],conservacion:'bueno'});
+  const [res,setRes]=useState(null);
+  const calc=()=>{
+    const m2C=parseFloat(form.m2C)||0, m2T=parseFloat(form.m2T)||0;
+    if(!m2C||!m2T) return;
+    const tarifas={'San José':250000,'Heredia':220000,'Cartago':180000,'Alajuela':160000,'Puntarenas':120000,'Guanacaste':280000,'Limón':100000};
+    const costos={lujo:950000,medio:650000,basico:400000};
+    const valT=m2T*tarifas[form.provincia];
+    const valCB=m2C*costos[form.acabados];
+    const dep=Math.min((2025-form.anio)*0.015,0.45);
+    const valC=valCB*(1-dep);
+    const ajP=form.parqueos*4500000, ajA=form.amenidades.length*2500000;
+    const ajCons={excelente:1.05,bueno:1.0,regular:0.92,malo:0.82}[form.conservacion];
+    const base=(valT+valC+ajP+ajA)*ajCons;
+    const valD=parseFloat(form.valorDeclarado)||0;
+    setRes({base,min:base*0.92,max:base*1.08,valT,valC,valCB,dep:dep*100,ajP,ajA,fiscal:base*0.85,diff:valD>0?((base*0.85-valD)/valD)*100:0,valD});
+  };
+  const inp={width:'100%',padding:'8px 12px',fontSize:'14px',borderRadius:'6px',border:`1px solid ${C.border}`,fontFamily:'Geist'};
+  return (
+    <div className="grid lg:grid-cols-2 gap-6">
+      <Card>
+        <SectionTitle kicker="Calculadora" subtitle="Valor referencial para la Declaración D-15">Valoración de propiedad</SectionTitle>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute,fontFamily:'Geist'}}>Valor declarado</label><input type="number" value={form.valorDeclarado} onChange={e=>setForm({...form,valorDeclarado:e.target.value})} placeholder="₡" style={inp}/></div>
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute,fontFamily:'Geist'}}>Año construcción</label><input type="number" value={form.anio} onChange={e=>setForm({...form,anio:parseInt(e.target.value)||2018})} style={inp}/></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute,fontFamily:'Geist'}}>m² construcción</label><input type="number" value={form.m2C} onChange={e=>setForm({...form,m2C:e.target.value})} placeholder="120" style={inp}/></div>
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute,fontFamily:'Geist'}}>m² terreno</label><input type="number" value={form.m2T} onChange={e=>setForm({...form,m2T:e.target.value})} placeholder="200" style={inp}/></div>
+          </div>
+          <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute}}>Provincia</label>
+            <select value={form.provincia} onChange={e=>setForm({...form,provincia:e.target.value})} style={inp}>
+              {['San José','Heredia','Cartago','Alajuela','Puntarenas','Guanacaste','Limón'].map(p=><option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute}}>Acabados</label>
+              <select value={form.acabados} onChange={e=>setForm({...form,acabados:e.target.value})} style={inp}><option value="basico">Básicos</option><option value="medio">Medios</option><option value="lujo">De lujo</option></select>
+            </div>
+            <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute}}>Conservación</label>
+              <select value={form.conservacion} onChange={e=>setForm({...form,conservacion:e.target.value})} style={inp}><option value="excelente">Excelente</option><option value="bueno">Bueno</option><option value="regular">Regular</option><option value="malo">Malo</option></select>
+            </div>
+          </div>
+          <div><label className="text-xs uppercase font-medium block mb-1" style={{color:C.mute}}>Parqueos: {form.parqueos}</label><input type="range" min="0" max="3" value={form.parqueos} onChange={e=>setForm({...form,parqueos:parseInt(e.target.value)})} style={{width:'100%'}}/></div>
+          <div>
+            <label className="text-xs uppercase font-medium block mb-2" style={{color:C.mute}}>Amenidades</label>
+            <div className="flex flex-wrap gap-2">
+              {['piscina','gimnasio','rancho','cancha','área de juegos'].map(a=>{
+                const act=form.amenidades.includes(a);
+                return <button key={a} onClick={()=>setForm({...form,amenidades:act?form.amenidades.filter(x=>x!==a):[...form.amenidades,a]})} style={{padding:'4px 12px',fontSize:'12px',borderRadius:'20px',border:`1px solid ${act?C.gold:C.border}`,background:act?`${C.gold}15`:'white',color:act?C.goldDark:C.mute,cursor:'pointer'}}>{a}</button>;
+              })}
+            </div>
+          </div>
+          <button onClick={calc} disabled={!form.m2C||!form.m2T} style={{width:'100%',padding:'12px',borderRadius:'8px',background:C.navy,color:'white',fontFamily:'Geist',fontWeight:600,fontSize:'14px',border:'none',cursor:'pointer',opacity:(!form.m2C||!form.m2T)?0.4:1}}>
+            🧮 Calcular valoración
+          </button>
+        </div>
+      </Card>
+      <div>
+        {res?(
+          <Card accent>
+            <SectionTitle kicker="Resultado" subtitle="Valor estimado de mercado">Valoración referencial</SectionTitle>
+            <div className="p-5 rounded-lg mb-5" style={{background:`linear-gradient(135deg,${C.cream},${C.paper})`,border:`1px solid ${C.border}`}}>
+              <div className="text-xs uppercase tracking-widest mb-2 font-medium" style={{color:C.gold,fontFamily:'Geist'}}>Rango estimado</div>
+              <div className="text-3xl font-medium" style={{fontFamily:'"Fraunces",Georgia,serif',color:C.navy,fontFeatureSettings:'"tnum"'}}>{fCRC(res.min)} – {fCRC(res.max)}</div>
+              <div className="text-xs mt-2" style={{color:C.mute}}>Punto medio: <span style={{fontFamily:'"Fraunces"',fontWeight:600,color:C.ink}}>{fCRC(res.base)}</span></div>
+            </div>
+            {[['Valor del terreno',fCRC(res.valT)],['Construcción sin depreciar',fCRC(res.valCB)],[`Depreciación (${res.dep.toFixed(0)}%)`,`−${fCRC(res.valCB-res.valC)}`],['Construcción depreciada',fCRC(res.valC)],['Parqueos / amenidades',fCRC(res.ajP+res.ajA)]].map(([k,v])=>(
+              <div key={k} className="flex justify-between text-sm mb-3"><span style={{color:C.mute,fontFamily:'Geist'}}>{k}</span><span style={{color:C.ink,fontFamily:'"Fraunces"',fontFeatureSettings:'"tnum"'}}>{v}</span></div>
+            ))}
+            <div className="p-4 rounded-lg mb-4 mt-4" style={{background:'#f0fdf4',border:`1px solid ${C.green}30`}}>
+              <div className="text-xs uppercase font-medium mb-1" style={{color:C.green,fontFamily:'Geist'}}>Valor fiscal recomendado D-15</div>
+              <div className="text-2xl font-medium" style={{fontFamily:'"Fraunces",Georgia,serif',color:C.navy,fontFeatureSettings:'"tnum"'}}>{fCRC(res.fiscal)}</div>
+            </div>
+            <div className="p-3 rounded text-xs flex gap-2" style={{background:'#f8fafc',color:C.mute,fontFamily:'Geist'}}>
+              <span style={{color:C.gold}}>ℹ</span>
+              <p><strong style={{color:C.navy}}>Valor referencial.</strong> El valor oficial lo determina la municipalidad con base en el mapa de valores del Ministerio de Hacienda.</p>
+            </div>
+          </Card>
+        ):(
+          <Card><div className="text-center py-12"><div style={{fontSize:48}}>🏠</div><h3 className="text-lg font-medium mt-4 mb-2" style={{color:C.navy,fontFamily:'"Fraunces",Georgia,serif'}}>Completá el formulario</h3><p className="text-sm" style={{color:C.mute}}>Llená m² de construcción y terreno para obtener la valoración.</p></div></Card>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const TABS=[
+  {id:'resumen',label:'Resumen',icon:'📊'},
+  {id:'gastos',label:'Gastos',icon:'💸'},
+  {id:'variaciones',label:'Variaciones',icon:'📈'},
+  {id:'proyeccion',label:'Proyección',icon:'🔮'},
+  {id:'facturas',label:'Facturas',icon:'🧾'},
+  {id:'chat',label:'Consultar IA',icon:'💬'},
+  {id:'valoracion',label:'Valoración',icon:'🏠'},
+];
+
+function App() {
+  const [condoId,setCondoId]=useState('los-robles');
+  const [tab,setTab]=useState('resumen');
+  const [updating,setUpdating]=useState(false);
+  const data=CONDOS[condoId];
+  const metrics=useMemo(()=>calcMetrics(data),[data]);
+  const actualizar=()=>{setUpdating(true);setTimeout(()=>setUpdating(false),1500);};
+  const renderTab=()=>{
+    switch(tab){
+      case 'resumen': return <TabResumen data={data} metrics={metrics}/>;
+      case 'gastos': return <TabGastos data={data} metrics={metrics}/>;
+      case 'variaciones': return <TabVariaciones data={data} metrics={metrics}/>;
+      case 'proyeccion': return <TabProyeccion data={data} metrics={metrics}/>;
+      case 'facturas': return <TabFacturas data={data} metrics={metrics}/>;
+      case 'chat': return <TabChat data={data} metrics={metrics}/>;
+      case 'valoracion': return <TabValoracion/>;
+      default: return null;
+    }
+  };
+  return (
+    <div style={{background:C.bg,minHeight:'100vh'}}>
+      <header style={{background:`linear-gradient(135deg,${C.navyDeeper},${C.navy})`,color:'white'}}>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{background:`${C.gold}20`,border:`1px solid ${C.gold}`,fontSize:'20px'}}>🏢</div>
+            <div>
+              <div style={{fontFamily:'"Fraunces",Georgia,serif',fontSize:'1.4rem',fontWeight:500,letterSpacing:'-0.02em',fontStyle:'italic'}}>CondoSmart</div>
+              <div className="text-xs opacity-70">Transparencia financiera para condominios</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <select value={condoId} onChange={e=>setCondoId(e.target.value)} style={{background:'rgba(255,255,255,0.1)',color:'white',border:'1px solid rgba(255,255,255,0.2)',padding:'8px 16px',borderRadius:'8px',fontSize:'14px',fontWeight:500,fontFamily:'Geist'}}>
+              {Object.values(CONDOS).map(c=><option key={c.id} value={c.id} style={{color:C.ink}}>{c.nombre} · {c.unidades} unidades</option>)}
+            </select>
+            <button onClick={actualizar} disabled={updating} style={{background:C.gold,color:C.navy,padding:'8px 16px',borderRadius:'8px',fontSize:'14px',fontWeight:600,fontFamily:'Geist',border:'none',cursor:'pointer',opacity:updating?0.7:1,display:'flex',alignItems:'center',gap:'8px'}}>
+              <span className={updating?'spin':''}style={{display:'inline-block'}}>↻</span>
+              {updating?'Sincronizando…':'Actualizar datos'}
+            </button>
+          </div>
+        </div>
+        <div className="border-t" style={{borderColor:'rgba(255,255,255,0.1)'}}>
+          <div className="max-w-7xl mx-auto px-6 flex overflow-x-auto">
+            {TABS.map(t=>{
+              const active=t.id===tab;
+              return (
+                <button key={t.id} onClick={()=>setTab(t.id)} style={{color:active?C.goldLight:'rgba(255,255,255,0.7)',borderBottom:`2px solid ${active?C.gold:'transparent'}`,padding:'12px 16px',fontSize:'14px',whiteSpace:'nowrap',background:'none',border:'none',borderBottom:`2px solid ${active?C.gold:'transparent'}`,cursor:'pointer',fontWeight:active?600:400,fontFamily:'Geist'}}>
+                  {t.icon} {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
+      <div className="border-b" style={{background:'white',borderColor:C.border}}>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-4 text-xs" style={{color:C.mute,fontFamily:'Geist'}}>
+            <span>🏢</span><span style={{color:C.ink,fontWeight:500}}>{data.nombre}</span>
+            <span>·</span><span>{data.unidades} unidades</span>
+            <span>·</span><span>Cuota {fCRC(data.cuota)}</span>
+            <span>·</span><span>{data.meses_disponibles.length} meses cargados</span>
+          </div>
+          <div className="text-xs" style={{color:C.mute,fontFamily:'Geist'}}>🔒 Datos seguros en Google Drive</div>
+        </div>
+      </div>
+      <main className="max-w-7xl mx-auto px-6 py-8">{renderTab()}</main>
+      <footer className="max-w-7xl mx-auto px-6 py-8 mt-8 border-t" style={{borderColor:C.border}}>
+        <div className="flex items-center justify-between flex-wrap gap-3 text-xs" style={{color:C.mute,fontFamily:'Geist'}}>
+          <div><strong style={{color:C.navy,fontFamily:'"Fraunces"',fontStyle:'italic'}}>CondoSmart</strong> · Transparencia financiera para condominios en Costa Rica</div>
+          <div>Sin login · Sin instalaciones · Datos en Google Drive</div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
